@@ -1,6 +1,8 @@
 import Jagfile from '#/io/Jagfile.js';
 import Packet from '#/io/Packet.js';
 
+
+
 export default class WordFilter {
     private static readonly PERIOD: Uint16Array = new Uint16Array(
         ['d', 'o', 't']
