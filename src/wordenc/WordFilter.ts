@@ -41,27 +41,7 @@ export default class WordFilter {
     }
 
     static filter(input: string): string {
-        const characters: string[] = [...input];
-        this.format(characters);
-        const trimmed: string = characters.join('').trim();
-        const lowercase: string = trimmed.toLowerCase();
-        const filtered: string[] = [...lowercase];
-        this.filterTlds(filtered);
-        this.filterBadWords(filtered);
-        this.filterDomains(filtered);
-        this.filterFragments(filtered);
-        for (let index: number = 0; index < this.whitelist.length; index++) {
-            let offset: number = -1;
-            while ((offset = lowercase.indexOf(this.whitelist[index], offset + 1)) !== -1) {
-                const whitelisted: string[] = [...this.whitelist[index]];
-                for (let charIndex: number = 0; charIndex < whitelisted.length; charIndex++) {
-                    filtered[charIndex + offset] = whitelisted[charIndex];
-                }
-            }
-        }
-        this.replaceUppercases(filtered, [...trimmed]);
-        this.formatUppercases(filtered);
-        return filtered.join('').trim();
+        return input;
     }
 
     private static read(bad: Packet, domain: Packet, fragments: Packet, tld: Packet): void {
@@ -133,7 +113,7 @@ export default class WordFilter {
     }
 
     private static filterFragments(chars: string[]): void {
-        for (let currentIndex: number = 0; currentIndex < chars.length; ) {
+        for (let currentIndex: number = 0; currentIndex < chars.length;) {
             const numberIndex: number = this.indexOfNumber(chars, currentIndex);
             if (numberIndex === -1) {
                 return;
@@ -426,7 +406,7 @@ export default class WordFilter {
         let hasNumber: boolean = false;
         let hasDigit: boolean = false;
 
-        for (; index < chars.length && !(hasNumber && hasDigit); ) {
+        for (; index < chars.length && !(hasNumber && hasDigit);) {
             if (index >= chars.length || (hasNumber && hasDigit)) {
                 break;
             }

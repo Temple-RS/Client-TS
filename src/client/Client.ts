@@ -2106,7 +2106,7 @@ export class Client extends GameShell {
 
         await this.handleInputKey();
 
-        if (now - this.idleTimer > 90_000) {
+        if (now - this.idleTimer > 180_000) {
             // no input in 90s, notify the server
             this.logoutTimer = 250;
             this.idleTimer += 10_000; // 10s backoff
