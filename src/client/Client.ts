@@ -492,6 +492,7 @@ export class Client extends GameShell {
     private nextMidiSong: number = -1;
 
     private displayFps: boolean = false;
+    private lastYellTime: number = 0;
 
     private onDemand: OnDemand | null = null;
     ingame: boolean = false;
@@ -3695,7 +3696,7 @@ export class Client extends GameShell {
                         }
                     } else if (this.chatModalId === -1) {
                         // custom: when typing a command, you can use the debugproc character (tilde)
-                        if (key >= 32 && (key <= 122 || (this.chatTyped.startsWith('::') && key <= 126)) && this.chatTyped.length < 80) {
+                        if (key >= 32 && (key <= 122 || ((this.chatTyped.startsWith('::') || this.chatTyped.startsWith('/')) && key <= 126)) && this.chatTyped.length < 80) {
                             this.chatTyped = this.chatTyped + String.fromCharCode(key);
                             this.redrawChatback = true;
                         }
@@ -3706,87 +3707,104 @@ export class Client extends GameShell {
                         }
 
                         if ((key === 13 || key === 10) && this.chatTyped.length > 0) {
-                            if (this.staffmodlevel === 2) {
-                                if (this.chatTyped === '::clientdrop') {
-                                    await this.lostCon();
-                                } else if (this.chatTyped === '::prefetchmusic') {
-                                    if (this.onDemand) {
-                                        for (let i = 0; i < this.onDemand.getFileCount(2); i++) {
-                                            this.onDemand.prefetchPriority(2, i, 1);
-                                        }
-                                    }
-                                } else if (this.chatTyped === '::lag') {
-                                    this.lag();
-                                }
+                            const typed = this.chatTyped.trim();
+                            this.chatTyped = '';
+                            this.redrawChatback = true;
+
+                            // custom: world broadcast command shortcut
+                            if (typed.startsWith('/')) {
+                                this.out.pIsaac(ClientProt.CLIENT_CHEAT);
+                                this.out.p1(typed.length + 1); // length of "/" + message + null terminator
+                                this.out.pjstr(typed);
+                                return;
                             }
 
-                            // custom: player-facing commands
-                            if (this.chatTyped === '::fpson') {
-                                // authentic in later revs
-                                this.displayFps = true;
-                            } else if (this.chatTyped === '::fpsoff') {
-                                // authentic in later revs
-                                this.displayFps = false;
-                            } else if (this.chatTyped.startsWith('::fps ')) {
-                                // custom ::fps command for setting a target framerate
-                                try {
-                                    const desiredFps = parseInt(this.chatTyped.substring(6)) || 50;
-                                    this.setTargetedFramerate(desiredFps);
-                                } catch (_e) {
-                                    // empty
+                            // custom: cheat commands
+                            if (typed.startsWith('::')) {
+                                if (this.staffmodlevel === 2) {
+                                    if (typed === '::clientdrop') {
+                                        await this.lostCon();
+                                        return;
+                                    } else if (typed === '::prefetchmusic') {
+                                        if (this.onDemand) {
+                                            for (let i = 0; i < this.onDemand.getFileCount(2); i++) {
+                                                this.onDemand.prefetchPriority(2, i, 1);
+                                            }
+                                        }
+                                        return;
+                                    } else if (typed === '::lag') {
+                                        this.lag();
+                                        return;
+                                    }
                                 }
-                            } else if (this.chatTyped.startsWith('::')) {
-                                this.out.pIsaac(ClientProt.CLIENT_CHEAT);
-                                this.out.p1(this.chatTyped.length - 2 + 1);
-                                this.out.pjstr(this.chatTyped.substring(2));
-                            } else {
+
+                                if (typed === '::fpson') {
+                                    this.displayFps = true;
+                                } else if (typed === '::fpsoff') {
+                                    this.displayFps = false;
+                                } else if (typed.startsWith('::fps ')) {
+                                    try {
+                                        const desiredFps = parseInt(typed.substring(6)) || 50;
+                                        this.setTargetedFramerate(desiredFps);
+                                    } catch (_e) { }
+                                } else {
+                                    this.out.pIsaac(ClientProt.CLIENT_CHEAT);
+                                    this.out.p1(typed.length - 2 + 1);
+                                    this.out.pjstr(typed.substring(2));
+                                }
+                                return;
+                            }
+
+                            // handle as public chat
+                            {
+                                let message = typed;
                                 let colour: number = 0;
-                                if (this.chatTyped.startsWith('yellow:')) {
+                                if (message.startsWith('yellow:')) {
                                     colour = 0;
-                                    this.chatTyped = this.chatTyped.substring(7);
-                                } else if (this.chatTyped.startsWith('red:')) {
+                                    message = message.substring(7);
+                                } else if (message.startsWith('red:')) {
                                     colour = 1;
-                                    this.chatTyped = this.chatTyped.substring(4);
-                                } else if (this.chatTyped.startsWith('green:')) {
+                                    message = message.substring(4);
+                                } else if (message.startsWith('green:')) {
                                     colour = 2;
-                                    this.chatTyped = this.chatTyped.substring(6);
-                                } else if (this.chatTyped.startsWith('cyan:')) {
+                                    message = message.substring(6);
+                                } else if (message.startsWith('cyan:')) {
                                     colour = 3;
-                                    this.chatTyped = this.chatTyped.substring(5);
-                                } else if (this.chatTyped.startsWith('purple:')) {
+                                    message = message.substring(5);
+                                } else if (message.startsWith('purple:')) {
                                     colour = 4;
-                                    this.chatTyped = this.chatTyped.substring(7);
-                                } else if (this.chatTyped.startsWith('white:')) {
+                                    message = message.substring(7);
+                                } else if (message.startsWith('white:')) {
                                     colour = 5;
-                                    this.chatTyped = this.chatTyped.substring(6);
-                                } else if (this.chatTyped.startsWith('flash1:')) {
+                                    message = message.substring(6);
+                                } else if (message.startsWith('flash1:')) {
                                     colour = 6;
-                                    this.chatTyped = this.chatTyped.substring(7);
-                                } else if (this.chatTyped.startsWith('flash2:')) {
+                                    message = message.substring(7);
+                                } else if (message.startsWith('flash2:')) {
                                     colour = 7;
-                                    this.chatTyped = this.chatTyped.substring(7);
-                                } else if (this.chatTyped.startsWith('flash3:')) {
+                                    message = message.substring(7);
+                                } else if (message.startsWith('flash3:')) {
                                     colour = 8;
-                                    this.chatTyped = this.chatTyped.substring(7);
-                                } else if (this.chatTyped.startsWith('glow1:')) {
+                                    message = message.substring(7);
+                                } else if (message.startsWith('glow1:')) {
                                     colour = 9;
-                                    this.chatTyped = this.chatTyped.substring(6);
-                                } else if (this.chatTyped.startsWith('glow2:')) {
+                                    message = message.substring(6);
+                                } else if (message.startsWith('glow2:')) {
                                     colour = 10;
-                                    this.chatTyped = this.chatTyped.substring(6);
-                                } else if (this.chatTyped.startsWith('glow3:')) {
+                                    message = message.substring(6);
+                                } else if (message.startsWith('glow3:')) {
                                     colour = 11;
-                                    this.chatTyped = this.chatTyped.substring(6);
+                                    message = message.substring(6);
                                 }
 
                                 let effect: number = 0;
-                                if (this.chatTyped.startsWith('wave:')) {
+                                if (message.startsWith('wave:')) {
                                     effect = 1;
-                                    this.chatTyped = this.chatTyped.substring(5);
+                                    message = message.substring(5);
                                 }
-                                if (this.chatTyped.startsWith('scroll:')) {
+                                if (message.startsWith('scroll:')) {
                                     effect = 2;
-                                    this.chatTyped = this.chatTyped.substring(7);
+                                    message = message.substring(7);
                                 }
 
                                 this.out.pIsaac(ClientProt.MESSAGE_PUBLIC);
@@ -3795,14 +3813,14 @@ export class Client extends GameShell {
 
                                 this.out.p1(colour);
                                 this.out.p1(effect);
-                                WordPack.pack(this.out, this.chatTyped);
+                                WordPack.pack(this.out, message);
                                 this.out.psize1(this.out.pos - start);
 
-                                this.chatTyped = JString.toSentenceCase(this.chatTyped);
-                                this.chatTyped = WordFilter.filter(this.chatTyped);
+                                message = JString.toSentenceCase(message);
+                                message = WordFilter.filter(message);
 
                                 if (this.localPlayer && this.localPlayer.name) {
-                                    this.localPlayer.chatMessage = this.chatTyped;
+                                    this.localPlayer.chatMessage = message;
                                     this.localPlayer.chatColour = colour;
                                     this.localPlayer.chatEffect = effect;
                                     this.localPlayer.chatTimer = 150;
@@ -11152,7 +11170,7 @@ export class Client extends GameShell {
 
                 if (type === 0) {
                     if (y > 0 && y < 110) {
-                        font?.drawString(4, y, message, Colour.BLACK);
+                        font?.drawStringTag(4, y, message, Colour.BLACK, false);
                     }
 
                     line++;
