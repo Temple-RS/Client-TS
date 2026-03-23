@@ -59,5 +59,11 @@ for (const file of entrypoints) {
     if (script) {
         fs.writeFileSync(`out/${output}`, script.source);
         fs.writeFileSync(`out/${output}.map`, script.sourcemap);
+
+        // sync with engine
+        const enginePublic = path.resolve('../engine/public/client');
+        if (fs.existsSync(enginePublic)) {
+            fs.writeFileSync(path.join(enginePublic, output), script.source);
+        }
     }
 }

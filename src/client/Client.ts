@@ -250,6 +250,8 @@ export class Client extends GameShell {
     private crossCycle: number = 0;
     private crossX: number = 0;
     private crossY: number = 0;
+    private lastMouseX: number = -1;
+    private lastMouseY: number = -1;
     private chatDisabled: number = 0;
     private isMenuOpen: boolean = false;
     private menuArea: number = 0;
@@ -259,6 +261,7 @@ export class Client extends GameShell {
     private menuHeight: number = 0;
     private menuNumEntries: number = 0;
     private menuOption: string[] = [];
+    private addedMenuOptions: Set<string> = new Set();
     private sideModalId: number = -1;
     private chatModalId: number = -1;
     private chatInterface: IfType = new IfType();
@@ -2634,6 +2637,25 @@ export class Client extends GameShell {
         }
     }
 
+    private tryAddMenuOption(option: string, itemName: string | null, action: MenuAction, paramA: number, paramB: number, paramC: number): boolean {
+        const fullOption = itemName ? (option + ' @lre@' + itemName) : option;
+        // Aggressively clean: remove markers, remove non-alphanumeric (except space), collapse whitespace, lowercase
+        const cleanOption = fullOption.replace(/@.+?@/g, '').replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+        if (this.addedMenuOptions.has(cleanOption)) {
+            return false;
+        }
+
+        this.menuOption[this.menuNumEntries] = fullOption;
+        this.menuAction[this.menuNumEntries] = action;
+        this.menuParamA[this.menuNumEntries] = paramA;
+        this.menuParamB[this.menuNumEntries] = paramB;
+        this.menuParamC[this.menuNumEntries] = paramC;
+        this.menuNumEntries++;
+        this.addedMenuOptions.add(cleanOption);
+        return true;
+    }
+
     // jag::oldscape::minimenu::Minimenu::Build
     private buildMinimenu(): void {
         if (this.objDragArea !== 0) {
@@ -2644,8 +2666,12 @@ export class Client extends GameShell {
         this.menuAction[0] = MenuAction.CANCEL;
         this.menuNumEntries = 1;
 
+        this.addedMenuOptions.clear();
+        this.addedMenuOptions.add('Cancel');
         this.addPrivateChatOptions();
         this.lastOverLayerId = 0;
+        this.hoveredSlot = -1;
+        this.hoveredSlotParentId = -1;
 
         // the main viewport area
         if (this.mouseX > 4 && this.mouseY > 4 && this.mouseX < 516 && this.mouseY < 338) {
@@ -2748,7 +2774,7 @@ export class Client extends GameShell {
                     _mod = true;
                 }
 
-                if ((type === 3 || type === 7) && (type === 7 || this.chatPrivateMode === 0 || (this.chatPrivateMode === 1 && this.isFriend(sender)))) {
+                if ((type === 3 || type === 7) && ((type === 7 && this.chatPrivateMode < 2) || this.chatPrivateMode === 0 || (this.chatPrivateMode === 1 && this.isFriend(sender)))) {
                     const y: number = 329 - line * 13;
 
                     if (this.mouseX > 4 && this.mouseX < 516 && this.mouseY - 4 > y - 10 && this.mouseY - 4 <= y + 3) {
@@ -2824,7 +2850,7 @@ export class Client extends GameShell {
                 }
 
                 line++;
-            } else if ((type === 3 || type === 7) && this.splitPrivateChat === 0 && (type === 7 || this.chatPrivateMode === 0 || (this.chatPrivateMode === 1 && this.isFriend(sender)))) {
+            } else if ((type === 3 || type === 7) && this.splitPrivateChat === 0 && ((type === 7 && this.chatPrivateMode < 2) || this.chatPrivateMode === 0 || (this.chatPrivateMode === 1 && this.isFriend(sender)))) {
                 if (mouseY > y - 14 && mouseY <= y) {
                     if (this.staffmodlevel >= 1) {
                         this.menuOption[this.menuNumEntries] = 'Report abuse @whi@' + sender;
@@ -3317,21 +3343,9 @@ export class Client extends GameShell {
             this.out.p1(this.chatPrivateMode);
             this.out.p1(this.chatTradeMode);
         } else if (this.mouseClickX >= 412 && this.mouseClickX <= 512 && this.mouseClickY >= 467 && this.mouseClickY <= 499) {
-            this.closeModal();
-
-            this.reportAbuseInput = '';
-            this.reportAbuseMuteOption = false;
-
-            for (let i: number = 0; i < IfType.list.length; i++) {
-                if (IfType.list[i] && IfType.list[i].clientCode === ClientCode.CC_REPORT_INPUT) {
-                    this.reportAbuseLayerId = this.mainModalId = IfType.list[i].layerId;
-                    break;
-                }
-            }
-
-            if (this.isMobile) {
-                MobileKeyboard.show();
-            }
+            this.addChat(0, 'This will open the Clan/Settings menu soon!', '');
+            // To start your clan system, we could open a specific interface here:
+            // this.openMainModal(CLAN_INTERFACE_ID); 
         }
     }
 
@@ -3426,6 +3440,18 @@ export class Client extends GameShell {
         } else {
             this.orbitCameraPitchVelocity = (this.orbitCameraPitchVelocity / 2) | 0;
         }
+
+        if (this.mouseButton === 4) {
+            if (this.lastMouseX !== -1 && this.lastMouseY !== -1) {
+                const dx: number = this.mouseX - this.lastMouseX;
+                const dy: number = this.mouseY - this.lastMouseY;
+                this.orbitCameraYaw = (this.orbitCameraYaw - (dx * 2)) & 0x7ff;
+                this.orbitCameraPitch = (this.orbitCameraPitch + (dy * 2)) | 0;
+            }
+        }
+
+        this.lastMouseX = this.mouseX;
+        this.lastMouseY = this.mouseY;
 
         this.orbitCameraYaw = ((this.orbitCameraYaw + this.orbitCameraYawVelocity / 2) | 0) & 0x7ff;
         this.orbitCameraPitch += (this.orbitCameraPitchVelocity / 2) | 0;
@@ -4542,8 +4568,14 @@ export class Client extends GameShell {
         }
     }
 
+    private seenWelcomeMessage: boolean = false;
+
     // jag::oldscape::Client::GameDraw
     private gameDraw(): void {
+        if (!this.seenWelcomeMessage) {
+            this.seenWelcomeMessage = true;
+        }
+
         if (this.players === null) {
             // client is unloading asynchronously
             return;
@@ -4815,7 +4847,7 @@ export class Client extends GameShell {
                 this.fontPlain12?.centreStringTag(324, 41, 'Off', Colour.RED, true);
             }
 
-            this.fontPlain12?.centreStringTag(458, 33, 'Report abuse', Colour.WHITE, true);
+            this.fontPlain12?.centreStringTag(458, 33, 'Settings', Colour.WHITE, true);
 
             this.areaBackbase1?.draw(0, 453);
 
@@ -5671,7 +5703,7 @@ export class Client extends GameShell {
                 modlevel = 2;
             }
 
-            if ((type == 3 || type == 7) && (type == 7 || this.chatPrivateMode == 0 || this.chatPrivateMode == 1 && this.isFriend(sender))) {
+            if ((type == 3 || type == 7) && ((type == 7 && this.chatPrivateMode < 2) || this.chatPrivateMode == 0 || this.chatPrivateMode == 1 && this.isFriend(sender))) {
                 const y = 329 - lineOffset * 13;
                 let x = 4;
 
@@ -10379,110 +10411,80 @@ export class Client extends GameShell {
                                 this.menuNumEntries++;
                             }
                         } else {
-                            if (child.interactable) {
-                                for (let op: number = 4; op >= 3; op--) {
-                                    if (obj.iop && obj.iop[op]) {
-                                        this.menuOption[this.menuNumEntries] = obj.iop[op] + ' @lre@' + obj.name;
+                            const isEquipmentTab = child.iop && child.iop[0] === 'Remove';
 
-                                        if (op === 3) {
-                                            this.menuAction[this.menuNumEntries] = MenuAction.OPHELD4;
-                                        } else if (op === 4) {
-                                            this.menuAction[this.menuNumEntries] = MenuAction.OPHELD5;
-                                        }
+                            // --- Visual Priority Building (Index-based, added LAST = TOP) ---
 
-                                        this.menuParamA[this.menuNumEntries] = obj.id;
-                                        this.menuParamB[this.menuNumEntries] = slot;
-                                        this.menuParamC[this.menuNumEntries] = child.id;
-                                        this.menuNumEntries++;
-                                    } else if (op === 4) {
-                                        this.menuOption[this.menuNumEntries] = 'Drop @lre@' + obj.name;
-                                        this.menuAction[this.menuNumEntries] = MenuAction.OPHELD5;
-                                        this.menuParamA[this.menuNumEntries] = obj.id;
-                                        this.menuParamB[this.menuNumEntries] = slot;
-                                        this.menuParamC[this.menuNumEntries] = child.id;
-                                        this.menuNumEntries++;
-                                    }
-                                }
+                            // 1. Bottom Level: Examine
+                            this.tryAddMenuOption('Examine', obj.name, MenuAction.OPHELD6, obj.id, slot, child.id);
+
+                            // 2. Mid-Low: Drop
+                            // Custom op5 handles standard Drop or shift-click variant
+                            if (obj.iop && obj.iop[4]) {
+                                this.tryAddMenuOption(obj.iop[4], obj.name, MenuAction.OPHELD5, obj.id, slot, child.id);
+                            } else if (!isEquipmentTab) {
+                                this.tryAddMenuOption('Drop', obj.name, MenuAction.OPHELD5, obj.id, slot, child.id);
                             }
 
+                            // 3. Mid Level: Use
                             if (child.usable) {
-                                this.menuOption[this.menuNumEntries] = 'Use @lre@' + obj.name;
-                                this.menuAction[this.menuNumEntries] = MenuAction.OPHELDT_START;
-                                this.menuParamA[this.menuNumEntries] = obj.id;
-                                this.menuParamB[this.menuNumEntries] = slot;
-                                this.menuParamC[this.menuNumEntries] = child.id;
-                                this.menuNumEntries++;
+                                this.tryAddMenuOption('Use', obj.name, MenuAction.OPHELDT_START, obj.id, slot, child.id);
                             }
 
-                            if (child.interactable && obj.iop) {
-                                for (let op: number = 2; op >= 0; op--) {
-                                    if (obj.iop[op]) {
-                                        this.menuOption[this.menuNumEntries] = obj.iop[op] + ' @lre@' + obj.name;
-
-                                        if (op === 0) {
-                                            this.menuAction[this.menuNumEntries] = MenuAction.OPHELD1;
-                                        } else if (op === 1) {
-                                            this.menuAction[this.menuNumEntries] = MenuAction.OPHELD2;
-                                        } else if (op === 2) {
-                                            this.menuAction[this.menuNumEntries] = MenuAction.OPHELD3;
-                                        }
-
-                                        this.menuParamA[this.menuNumEntries] = obj.id;
-                                        this.menuParamB[this.menuNumEntries] = slot;
-                                        this.menuParamC[this.menuNumEntries] = child.id;
-                                        this.menuNumEntries++;
-                                    }
+                            // 4. Mid-High: Component Interaction
+                            // Only add if it's NOT 'Use' or other standard item actions.
+                            if (child.iop && child.iop[0]) {
+                                const componentOp = child.iop[0].toLowerCase();
+                                if (componentOp !== 'use' && componentOp !== 'examine' && componentOp !== 'drop') {
+                                    this.tryAddMenuOption(child.iop[0], obj.name, MenuAction.INV_BUTTON1, obj.id, slot, child.id);
                                 }
                             }
 
-                            if (child.iop) {
-                                for (let op: number = 4; op >= 0; op--) {
-                                    if (child.iop[op]) {
-                                        this.menuOption[this.menuNumEntries] = child.iop[op] + ' @lre@' + obj.name;
-
-                                        if (op === 0) {
-                                            this.menuAction[this.menuNumEntries] = MenuAction.INV_BUTTON1;
-                                        } else if (op === 1) {
-                                            this.menuAction[this.menuNumEntries] = MenuAction.INV_BUTTON2;
-                                        } else if (op === 2) {
-                                            this.menuAction[this.menuNumEntries] = MenuAction.INV_BUTTON3;
-                                        } else if (op === 3) {
-                                            this.menuAction[this.menuNumEntries] = MenuAction.INV_BUTTON4;
-                                        } else if (op === 4) {
-                                            this.menuAction[this.menuNumEntries] = MenuAction.INV_BUTTON5;
+                            // 5. TOP Level: Primary Actions (Wield/Eat/etc.)
+                            // These are added absolute LAST so they appear at the VERY TOP of the menu
+                            if ((child.interactable || isEquipmentTab) && obj.iop) {
+                                for (let op = 4; op >= 1; op--) { // Process iop 4 -> 1, iop[0] is top
+                                    const option = obj.iop[op - 1];
+                                    if (option) {
+                                        // Filter out context-inappropriate options
+                                        if (isEquipmentTab && (option.toLowerCase() === 'wear' || option.toLowerCase() === 'wield')) {
+                                            continue;
                                         }
 
-                                        this.menuParamA[this.menuNumEntries] = obj.id;
-                                        this.menuParamB[this.menuNumEntries] = slot;
-                                        this.menuParamC[this.menuNumEntries] = child.id;
-                                        this.menuNumEntries++;
+                                        let action = MenuAction.OPHELD1;
+                                        if (op === 2) action = MenuAction.OPHELD2;
+                                        else if (op === 3) action = MenuAction.OPHELD3;
+                                        else if (op === 4) action = MenuAction.OPHELD4;
+
+                                        this.tryAddMenuOption(option, obj.name, action, obj.id, slot, child.id);
                                     }
                                 }
                             }
-
-                            this.menuOption[this.menuNumEntries] = 'Examine @lre@' + obj.name;
-                            this.menuAction[this.menuNumEntries] = MenuAction.OPHELD6;
-                            this.menuParamA[this.menuNumEntries] = obj.id;
-                            this.menuParamB[this.menuNumEntries] = slot;
-                            this.menuParamC[this.menuNumEntries] = child.id;
-                            this.menuNumEntries++;
                         }
 
                         slot++;
                     }
                 }
             } else if (mouseX >= childX && mouseY >= childY && mouseX < childX + child.width && mouseY < childY + child.height) {
-                if (child.buttonType === ButtonType.BUTTON_OK) {
+                if (child.buttonType === ButtonType.BUTTON_OK && child.type !== ComponentType.TYPE_INV) {
                     let override: boolean = false;
                     if (child.clientCode !== 0) {
                         override = this.addSocialListOptions(child);
                     }
 
                     if (!override && child.option) {
-                        this.menuOption[this.menuNumEntries] = child.option;
-                        this.menuAction[this.menuNumEntries] = MenuAction.IF_BUTTON;
-                        this.menuParamC[this.menuNumEntries] = child.id;
-                        this.menuNumEntries++;
+                        const cleanOption = child.option.replace(/@.+?@/g, '').replace(/[^a-zA-Z0-9 ]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+                        // Prevent generic component-level "Use" from appearing on top of inventory item options
+                        const shouldSuppressUse = cleanOption === 'use' && this.hoveredSlot !== -1;
+
+                        if (!this.addedMenuOptions.has(cleanOption) && !shouldSuppressUse) {
+                            this.menuOption[this.menuNumEntries] = child.option;
+                            this.menuAction[this.menuNumEntries] = MenuAction.IF_BUTTON;
+                            this.menuParamC[this.menuNumEntries] = child.id;
+                            this.menuNumEntries++;
+                            this.addedMenuOptions.add(cleanOption);
+                        }
                     }
                 } else if (child.buttonType === ButtonType.BUTTON_TARGET && this.targetMode === 0) {
                     let prefix: string | null = child.targetVerb;
@@ -11169,6 +11171,12 @@ export class Client extends GameShell {
                 }
 
                 if (type === 0) {
+                    if (this.chatPublicMode === 2 || this.chatPublicMode === 3) {
+                        if (message.startsWith('[') && message.substring(1).includes(']: ')) {
+                            continue;
+                        }
+                    }
+
                     if (y > 0 && y < 110) {
                         font?.drawStringTag(4, y, message, Colour.BLACK, false);
                     }
@@ -11192,7 +11200,7 @@ export class Client extends GameShell {
                     }
 
                     line++;
-                } else if ((type === 3 || type === 7) && this.splitPrivateChat === 0 && (type === 7 || this.chatPrivateMode === 0 || (this.chatPrivateMode === 1 && this.isFriend(sender)))) {
+                } else if ((type === 3 || type === 7) && this.splitPrivateChat === 0 && ((type === 7 && this.chatPrivateMode < 2) || this.chatPrivateMode === 0 || (this.chatPrivateMode === 1 && this.isFriend(sender)))) {
                     if (y > 0 && y < 110) {
                         let x = 4;
 
