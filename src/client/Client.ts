@@ -3316,7 +3316,7 @@ export class Client extends GameShell {
         }
 
         if (this.mouseClickX >= 6 && this.mouseClickX <= 106 && this.mouseClickY >= 467 && this.mouseClickY <= 499) {
-            this.chatPublicMode = (this.chatPublicMode + 1) % 4;
+            this.chatPublicMode = (this.chatPublicMode + 1) % 5;
             this.redrawPrivacySettings = true;
             this.redrawChatback = true;
 
@@ -4813,16 +4813,15 @@ export class Client extends GameShell {
 
             this.fontPlain12?.centreStringTag(55, 28, 'Public chat', Colour.WHITE, true);
             if (this.chatPublicMode === 0) {
-                this.fontPlain12?.centreStringTag(55, 41, 'On', Colour.GREEN, true);
-            }
-            if (this.chatPublicMode === 1) {
-                this.fontPlain12?.centreStringTag(55, 41, 'Friends', Colour.YELLOW, true);
-            }
-            if (this.chatPublicMode === 2) {
-                this.fontPlain12?.centreStringTag(55, 41, 'Off', Colour.RED, true);
-            }
-            if (this.chatPublicMode === 3) {
-                this.fontPlain12?.centreStringTag(55, 41, 'Hide', Colour.CYAN, true);
+                this.fontPlain12?.centreStringTag(55, 41, 'All', Colour.GREEN, true);
+            } else if (this.chatPublicMode === 1) {
+                this.fontPlain12?.centreStringTag(55, 41, 'World', Colour.YELLOW, true);
+            } else if (this.chatPublicMode === 2) {
+                this.fontPlain12?.centreStringTag(55, 41, 'Clan', 0xFFA500, true); // Orange
+            } else if (this.chatPublicMode === 3) {
+                this.fontPlain12?.centreStringTag(55, 41, 'Public', 0x00FFFF, true); // Cyan/Public blue
+            } else if (this.chatPublicMode === 4) {
+                this.fontPlain12?.centreStringTag(55, 41, 'Hide', Colour.RED, true);
             }
 
             this.fontPlain12?.centreStringTag(184, 28, 'Private chat', Colour.WHITE, true);
@@ -11182,10 +11181,17 @@ export class Client extends GameShell {
                 }
 
                 if (type === 0) {
-                    if (this.chatPublicMode === 2 || this.chatPublicMode === 3) {
-                        if (message.startsWith('[') && message.substring(1).includes(']: ')) {
-                            continue;
-                        }
+                    const isYell = message.startsWith('[') && message.substring(1).includes(']: ');
+                    const isClan = message.startsWith('@red@[Clan]');
+
+                    if (this.chatPublicMode === 1) { // World
+                        if (!isYell) continue;
+                    } else if (this.chatPublicMode === 2) { // Clan
+                        if (!isClan) continue;
+                    } else if (this.chatPublicMode === 3) { // Public
+                        if (isYell || isClan) continue;
+                    } else if (this.chatPublicMode === 4) { // Hide
+                        continue;
                     }
 
                     if (y > 0 && y < 110) {
@@ -11193,7 +11199,7 @@ export class Client extends GameShell {
                     }
 
                     line++;
-                } else if ((type === 1 || type === 2) && (type === 1 || this.chatPublicMode === 0 || (this.chatPublicMode === 1 && this.isFriend(sender)))) {
+                } else if ((type === 1 || type === 2) && (type === 1 || this.chatPublicMode === 0 || this.chatPublicMode === 3 || (this.chatPublicMode === 1 && this.isFriend(sender)))) {
                     if (y > 0 && y < 110) {
                         let x = 4;
                         if (modlevel == 1) {
