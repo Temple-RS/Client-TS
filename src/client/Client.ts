@@ -332,10 +332,10 @@ export class Client extends GameShell {
     private targetMask: number = 0;
     private targetOp: string | null = null;
     private oneMouseButton: number = 0;
-    private menuAction: Int32Array = new Int32Array(500);
-    private menuParamA: Int32Array = new Int32Array(500);
-    private menuParamB: Int32Array = new Int32Array(500);
-    private menuParamC: Int32Array = new Int32Array(500);
+    private menuAction: Int32Array = new Int32Array(2000);
+    private menuParamA: Int32Array = new Int32Array(2000);
+    private menuParamB: Int32Array = new Int32Array(2000);
+    private menuParamC: Int32Array = new Int32Array(2000);
     private hoveredSlotParentId: number = 0;
     private hoveredSlot: number = 0;
     private lastOverLayerId: number = 0;
@@ -10433,10 +10433,21 @@ export class Client extends GameShell {
 
                             // 4. Mid-High: Component Interaction
                             // Only add if it's NOT 'Use' or other standard item actions.
-                            if (child.iop && child.iop[0]) {
-                                const componentOp = child.iop[0].toLowerCase();
-                                if (componentOp !== 'use' && componentOp !== 'examine' && componentOp !== 'drop') {
-                                    this.tryAddMenuOption(child.iop[0], obj.name, MenuAction.INV_BUTTON1, obj.id, slot, child.id);
+                            if (child.iop) {
+                                for (let op = 4; op >= 0; op--) { // Process iop 5 (index 4) -> 1 (index 0)
+                                    const option = child.iop[op];
+                                    if (option) {
+                                        const componentOp = option.toLowerCase();
+                                        if (componentOp !== 'use' && componentOp !== 'examine' && componentOp !== 'drop') {
+                                            let action = MenuAction.INV_BUTTON1;
+                                            if (op === 1) action = MenuAction.INV_BUTTON2;
+                                            else if (op === 2) action = MenuAction.INV_BUTTON3;
+                                            else if (op === 3) action = MenuAction.INV_BUTTON4;
+                                            else if (op === 4) action = MenuAction.INV_BUTTON5;
+
+                                            this.tryAddMenuOption(option, obj.name, action, obj.id, slot, child.id);
+                                        }
+                                    }
                                 }
                             }
 
