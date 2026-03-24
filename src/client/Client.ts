@@ -10419,10 +10419,14 @@ export class Client extends GameShell {
 
                             // 2. Mid-Low: Drop
                             // Custom op5 handles standard Drop or shift-click variant
-                            if (obj.iop && obj.iop[4]) {
-                                this.tryAddMenuOption(obj.iop[4], obj.name, MenuAction.OPHELD5, obj.id, slot, child.id);
-                            } else if (!isEquipmentTab) {
-                                this.tryAddMenuOption('Drop', obj.name, MenuAction.OPHELD5, obj.id, slot, child.id);
+                            // Only show Drop when the component has no custom iop of its own (e.g. not bank/shop/trade)
+                            const hasCustomOptions = child.iop && (child.iop[0] !== null || child.iop[1] !== null || child.iop[2] !== null || child.iop[3] !== null || child.iop[4] !== null);
+                            if (!hasCustomOptions || isEquipmentTab) {
+                                if (obj.iop && obj.iop[4]) {
+                                    this.tryAddMenuOption(obj.iop[4], obj.name, MenuAction.OPHELD5, obj.id, slot, child.id);
+                                } else if (!isEquipmentTab) {
+                                    this.tryAddMenuOption('Drop', obj.name, MenuAction.OPHELD5, obj.id, slot, child.id);
+                                }
                             }
 
                             // 3. Mid Level: Use
