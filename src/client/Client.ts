@@ -288,6 +288,7 @@ export class Client extends GameShell {
     private chatPublicMode: number = 0;
     private chatPrivateMode: number = 0;
     private chatTradeMode: number = 0;
+    private chatTab: number = 0; // 0=All, 1=Public, 2=Private, 3=Trade
     private scrollGrabbed: boolean = false;
     private scrollInputPadding: number = 0;
     private socialInputOpen: boolean = false;
@@ -2830,9 +2831,9 @@ export class Client extends GameShell {
                 _mod = true;
             }
 
-            if (type === 0) {
+            if (type === 0 && (this.chatPublicMode === 0 || (this.chatPublicMode === 1 && !this.messageText[i]?.startsWith('[')))) {
                 line++;
-            } else if ((type == 1 || type == 2) && (type == 1 || this.chatPublicMode == 0 || this.chatPublicMode == 1 && this.isFriend(sender))) {
+            } else if ((type === 1 || type === 2) && (this.chatPublicMode === 0 || this.chatPublicMode === 1)) {
                 if (mouseY > y - 14 && mouseY <= y && this.localPlayer && sender !== this.localPlayer.name) {
                     if (this.staffmodlevel >= 1) {
                         this.menuOption[this.menuNumEntries] = 'Report abuse @whi@' + sender;
@@ -2850,7 +2851,7 @@ export class Client extends GameShell {
                 }
 
                 line++;
-            } else if ((type === 3 || type === 7) && this.splitPrivateChat === 0 && ((type === 7 && this.chatPrivateMode < 2) || this.chatPrivateMode === 0 || (this.chatPrivateMode === 1 && this.isFriend(sender)))) {
+            } else if ((type === 3 || type === 7) && this.chatPublicMode !== 2 && this.splitPrivateChat === 0 && ((type === 7 && this.chatPrivateMode < 2) || this.chatPrivateMode === 0 || (this.chatPrivateMode === 1 && this.isFriend(sender)))) {
                 if (mouseY > y - 14 && mouseY <= y) {
                     if (this.staffmodlevel >= 1) {
                         this.menuOption[this.menuNumEntries] = 'Report abuse @whi@' + sender;
@@ -2868,7 +2869,7 @@ export class Client extends GameShell {
                 }
 
                 line++;
-            } else if (type === 4 && (this.chatTradeMode === 0 || (this.chatTradeMode === 1 && this.isFriend(sender)))) {
+            } else if (type === 4 && this.chatPublicMode !== 2 && (this.chatTradeMode === 0 || (this.chatTradeMode === 1 && this.isFriend(sender)))) {
                 if (mouseY > y - 14 && mouseY <= y) {
                     this.menuOption[this.menuNumEntries] = 'Accept trade @whi@' + sender;
                     this.menuAction[this.menuNumEntries] = MenuAction.OPPLAYER_TRADEREQ;
@@ -2876,9 +2877,9 @@ export class Client extends GameShell {
                 }
 
                 line++;
-            } else if ((type === 5 || type === 6) && this.splitPrivateChat === 0 && this.chatPrivateMode < 2) {
+            } else if ((type === 5 || type === 6) && this.chatPublicMode !== 2 && this.splitPrivateChat === 0 && this.chatPrivateMode < 2) {
                 line++;
-            } else if (type === 8 && (this.chatTradeMode === 0 || (this.chatTradeMode === 1 && this.isFriend(sender)))) {
+            } else if (type === 8 && this.chatPublicMode !== 2 && (this.chatTradeMode === 0 || (this.chatTradeMode === 1 && this.isFriend(sender)))) {
                 if (mouseY > y - 14 && mouseY <= y) {
                     this.menuOption[this.menuNumEntries] = 'Accept duel @whi@' + sender;
                     this.menuAction[this.menuNumEntries] = MenuAction.OPPLAYER_DUELREQ;
@@ -3311,41 +3312,70 @@ export class Client extends GameShell {
     }
 
     private chatModeLoop(): void {
-        if (this.mouseClickButton !== 1) {
+        if (this.mouseClickButton === 0) {
             return;
         }
 
-        if (this.mouseClickX >= 6 && this.mouseClickX <= 106 && this.mouseClickY >= 467 && this.mouseClickY <= 499) {
-            this.chatPublicMode = (this.chatPublicMode + 1) % 5;
+        const isLeftClick = this.mouseClickButton === 1;
+        const isRightClick = this.mouseClickButton === 2;
+
+        if (this.mouseClickY < 467 || this.mouseClickY > 499) {
+            return;
+        }
+
+        let updatedMode = false;
+
+        const buttonWidth = 127;
+        const x = this.mouseClickX;
+        const isToggle = this.mouseClickY > 480;
+
+        if (x >= 0 && x < 130) {
+            // TAB 1: ALL
+            if (isToggle || isRightClick) {
+                this.chatPublicMode = (this.chatPublicMode + 1) % 3;
+                updatedMode = true;
+            } else if (isLeftClick) {
+                this.chatTab = 0;
+            }
             this.redrawPrivacySettings = true;
             this.redrawChatback = true;
+        } else if (x >= 130 && x < 265) {
+            // TAB 2: PUBLIC
+            if (isToggle || isRightClick) {
+                this.chatPublicMode = (this.chatPublicMode + 1) % 3;
+                updatedMode = true;
+            } else if (isLeftClick) {
+                this.chatTab = 1;
+            }
+            this.redrawPrivacySettings = true;
+            this.redrawChatback = true;
+        } else if (x >= 265 && x < 400) {
+            // TAB 3: PRIVATE
+            if (isToggle || isRightClick) {
+                this.chatPrivateMode = (this.chatPrivateMode + 1) % 3;
+                updatedMode = true;
+            } else if (isLeftClick) {
+                this.chatTab = 2;
+            }
+            this.redrawPrivacySettings = true;
+            this.redrawChatback = true;
+        } else if (x >= 400 && x <= 512) {
+            // TAB 4: TRADE
+            if (isToggle || isRightClick) {
+                this.chatTradeMode = (this.chatTradeMode + 1) % 3;
+                updatedMode = true;
+            } else if (isLeftClick) {
+                this.chatTab = 3;
+            }
+            this.redrawPrivacySettings = true;
+            this.redrawChatback = true;
+        }
 
+        if (updatedMode) {
             this.out.pIsaac(ClientProt.CHAT_SETMODE);
             this.out.p1(this.chatPublicMode);
             this.out.p1(this.chatPrivateMode);
             this.out.p1(this.chatTradeMode);
-        } else if (this.mouseClickX >= 135 && this.mouseClickX <= 235 && this.mouseClickY >= 467 && this.mouseClickY <= 499) {
-            this.chatPrivateMode = (this.chatPrivateMode + 1) % 3;
-            this.redrawPrivacySettings = true;
-            this.redrawChatback = true;
-
-            this.out.pIsaac(ClientProt.CHAT_SETMODE);
-            this.out.p1(this.chatPublicMode);
-            this.out.p1(this.chatPrivateMode);
-            this.out.p1(this.chatTradeMode);
-        } else if (this.mouseClickX >= 273 && this.mouseClickX <= 373 && this.mouseClickY >= 467 && this.mouseClickY <= 499) {
-            this.chatTradeMode = (this.chatTradeMode + 1) % 3;
-            this.redrawPrivacySettings = true;
-            this.redrawChatback = true;
-
-            this.out.pIsaac(ClientProt.CHAT_SETMODE);
-            this.out.p1(this.chatPublicMode);
-            this.out.p1(this.chatPrivateMode);
-            this.out.p1(this.chatTradeMode);
-        } else if (this.mouseClickX >= 412 && this.mouseClickX <= 512 && this.mouseClickY >= 467 && this.mouseClickY <= 499) {
-            this.addChat(0, 'This will open the Clan/Settings menu soon!', '');
-            // To start your clan system, we could open a specific interface here:
-            // this.openMainModal(CLAN_INTERFACE_ID); 
         }
     }
 
@@ -3745,6 +3775,14 @@ export class Client extends GameShell {
                                 return;
                             }
 
+                            // custom: trade broadcast command shortcut
+                            if (typed.startsWith('$')) {
+                                this.out.pIsaac(ClientProt.CLIENT_CHEAT);
+                                this.out.p1(typed.length + 1); // length of "$" + message + null terminator
+                                this.out.pjstr(typed);
+                                return;
+                            }
+
                             // custom: cheat commands
                             if (typed.startsWith('::')) {
                                 if (this.staffmodlevel === 2) {
@@ -3860,8 +3898,8 @@ export class Client extends GameShell {
                                     }
                                 }
 
-                                if (this.chatPublicMode === 2) {
-                                    this.chatPublicMode = 3;
+                                if (this.chatPublicMode === 2) { // Hide
+                                    this.chatPublicMode = 1; // Auto-switch to Public if sending local text
                                     this.redrawPrivacySettings = true;
 
                                     this.out.pIsaac(ClientProt.CHAT_SETMODE);
@@ -4811,45 +4849,73 @@ export class Client extends GameShell {
             this.areaBackbase1?.bind();
             this.backbase1?.plotSprite(0, 0);
 
-            this.fontPlain12?.centreStringTag(55, 28, 'Public chat', Colour.WHITE, true);
+            // Authentic centers for the pre-rendered stone background buttons
+            const b1 = 55;
+            const b2 = 184;
+            const b3 = 324;
+            const b4 = 458;
+
+            // Tab 1: ALL
+            const isActive0 = this.chatTab === 0;
+            const allColor = isActive0 ? 0x00FFFF : Colour.WHITE;
+            this.fontPlain12?.centreStringTag(b1, 28, 'ALL', allColor, true);
+            if (isActive0) {
+                Pix2D.fillRect(b1 - 40, 30, 80, 1, 0x00FFFF);
+            }
             if (this.chatPublicMode === 0) {
-                this.fontPlain12?.centreStringTag(55, 41, 'All', Colour.GREEN, true);
+                this.fontPlain12?.centreStringTag(b1, 41, 'All Messages', Colour.GREEN, true);
             } else if (this.chatPublicMode === 1) {
-                this.fontPlain12?.centreStringTag(55, 41, 'World', Colour.YELLOW, true);
+                this.fontPlain12?.centreStringTag(b1, 41, 'Filtered', 0x00FFFF, true);
             } else if (this.chatPublicMode === 2) {
-                this.fontPlain12?.centreStringTag(55, 41, 'Clan', 0xFFA500, true); // Orange
-            } else if (this.chatPublicMode === 3) {
-                this.fontPlain12?.centreStringTag(55, 41, 'Public', 0x00FFFF, true); // Cyan/Public blue
-            } else if (this.chatPublicMode === 4) {
-                this.fontPlain12?.centreStringTag(55, 41, 'Hide', Colour.RED, true);
+                this.fontPlain12?.centreStringTag(b1, 41, 'Hidden', Colour.RED, true);
             }
 
-            this.fontPlain12?.centreStringTag(184, 28, 'Private chat', Colour.WHITE, true);
+            // Tab 2: PUBLIC
+            const isActive1 = this.chatTab === 1;
+            const pubColor = isActive1 ? 0x00FFFF : Colour.WHITE;
+            this.fontPlain12?.centreStringTag(b2, 28, 'Public', pubColor, true);
+            if (isActive1) {
+                Pix2D.fillRect(b2 - 40, 30, 80, 1, 0x00FFFF);
+            }
+            if (this.chatPublicMode === 0) {
+                this.fontPlain12?.centreStringTag(b2, 41, 'On', Colour.GREEN, true);
+            } else if (this.chatPublicMode === 1) {
+                this.fontPlain12?.centreStringTag(b2, 41, 'Friends', Colour.YELLOW, true);
+            } else if (this.chatPublicMode === 2) {
+                this.fontPlain12?.centreStringTag(b2, 41, 'Off', Colour.RED, true);
+            }
+
+            // Tab 3: PRIVATE
+            const isActive2 = this.chatTab === 2;
+            const privColor = isActive2 ? 0x00FFFF : Colour.WHITE;
+            this.fontPlain12?.centreStringTag(b3, 28, 'Private', privColor, true);
+            if (isActive2) {
+                Pix2D.fillRect(b3 - 40, 30, 80, 1, 0x00FFFF);
+            }
             if (this.chatPrivateMode === 0) {
-                this.fontPlain12?.centreStringTag(184, 41, 'On', Colour.GREEN, true);
-            }
-            if (this.chatPrivateMode === 1) {
-                this.fontPlain12?.centreStringTag(184, 41, 'Friends', Colour.YELLOW, true);
-            }
-            if (this.chatPrivateMode === 2) {
-                this.fontPlain12?.centreStringTag(184, 41, 'Off', Colour.RED, true);
+                this.fontPlain12?.centreStringTag(b3, 41, 'On', Colour.GREEN, true);
+            } else if (this.chatPrivateMode === 1) {
+                this.fontPlain12?.centreStringTag(b3, 41, 'Friends', Colour.YELLOW, true);
+            } else if (this.chatPrivateMode === 2) {
+                this.fontPlain12?.centreStringTag(b3, 41, 'Off', Colour.RED, true);
             }
 
-            this.fontPlain12?.centreStringTag(324, 28, 'Trade/duel', Colour.WHITE, true);
+            // Tab 4: TRADE
+            const isActive3 = this.chatTab === 3;
+            const tradeColor = isActive3 ? 0x00FFFF : Colour.WHITE;
+            this.fontPlain12?.centreStringTag(b4, 28, 'Trade', tradeColor, true);
+            if (isActive3) {
+                Pix2D.fillRect(b4 - 40, 30, 80, 1, 0x00FFFF);
+            }
             if (this.chatTradeMode === 0) {
-                this.fontPlain12?.centreStringTag(324, 41, 'On', Colour.GREEN, true);
+                this.fontPlain12?.centreStringTag(b4, 41, 'On', Colour.GREEN, true);
+            } else if (this.chatTradeMode === 1) {
+                this.fontPlain12?.centreStringTag(b4, 41, 'Friends', Colour.YELLOW, true);
+            } else if (this.chatTradeMode === 2) {
+                this.fontPlain12?.centreStringTag(b4, 41, 'Off', Colour.RED, true);
             }
-            if (this.chatTradeMode === 1) {
-                this.fontPlain12?.centreStringTag(324, 41, 'Friends', Colour.YELLOW, true);
-            }
-            if (this.chatTradeMode === 2) {
-                this.fontPlain12?.centreStringTag(324, 41, 'Off', Colour.RED, true);
-            }
-
-            this.fontPlain12?.centreStringTag(458, 33, 'Settings', Colour.WHITE, true);
 
             this.areaBackbase1?.draw(0, 453);
-
             this.areaViewport?.bind();
         }
 
@@ -5327,7 +5393,7 @@ export class Client extends GameShell {
                 }
             }
 
-            if (entity.chatMessage && (index >= this.playerCount || this.chatPublicMode === 0 || this.chatPublicMode === 3 || (this.chatPublicMode === 1 && this.isFriend((entity as ClientPlayer).name)))) {
+            if (entity.chatMessage && this.chatPublicMode !== 2) {
                 this.getOverlayPosEntity(entity, entity.height);
 
                 if (this.projectX > -1 && this.chatCount < Constants.MAX_CHATS && this.fontBold12) {
@@ -5702,7 +5768,7 @@ export class Client extends GameShell {
                 modlevel = 2;
             }
 
-            if ((type == 3 || type == 7) && ((type == 7 && this.chatPrivateMode < 2) || this.chatPrivateMode == 0 || this.chatPrivateMode == 1 && this.isFriend(sender))) {
+            if (this.chatPublicMode !== 2 && (type == 3 || type == 7) && ((type == 7 && this.chatPrivateMode < 2) || this.chatPrivateMode == 0 || this.chatPrivateMode == 1 && this.isFriend(sender))) {
                 const y = 329 - lineOffset * 13;
                 let x = 4;
 
@@ -5725,7 +5791,7 @@ export class Client extends GameShell {
                 if (lineOffset >= 5) {
                     return;
                 }
-            } else if (type === 5 && this.chatPrivateMode < 2) {
+            } else if (this.chatPublicMode !== 2 && type === 5 && this.chatPrivateMode < 2) {
                 const y = 329 - lineOffset * 13;
 
                 font?.drawString(4, y, this.messageText[i], Colour.BLACK);
@@ -5735,7 +5801,7 @@ export class Client extends GameShell {
                 if (lineOffset >= 5) {
                     return;
                 }
-            } else if (type === 6 && this.chatPrivateMode < 2) {
+            } else if (this.chatPublicMode !== 2 && type === 6 && this.chatPrivateMode < 2) {
                 const y = 329 - lineOffset * 13;
 
                 font?.drawString(4, y, 'To ' + sender + ': ' + this.messageText[i], Colour.BLACK);
@@ -10456,15 +10522,10 @@ export class Client extends GameShell {
 
                             // 5. TOP Level: Primary Actions (Wield/Eat/etc.)
                             // These are added absolute LAST so they appear at the VERY TOP of the menu
-                            if ((child.interactable || isEquipmentTab) && obj.iop) {
+                            if (child.interactable && obj.iop && !isEquipmentTab) {
                                 for (let op = 4; op >= 1; op--) { // Process iop 4 -> 1, iop[0] is top
                                     const option = obj.iop[op - 1];
                                     if (option) {
-                                        // Filter out context-inappropriate options
-                                        if (isEquipmentTab && (option.toLowerCase() === 'wear' || option.toLowerCase() === 'wield')) {
-                                            continue;
-                                        }
-
                                         let action = MenuAction.OPHELD1;
                                         if (op === 2) action = MenuAction.OPHELD2;
                                         else if (op === 3) action = MenuAction.OPHELD3;
@@ -11166,14 +11227,13 @@ export class Client extends GameShell {
             Pix2D.setClipping(0, 0, 463, 77);
 
             for (let i: number = 0; i < 100; i++) {
-                const message: string | null = this.messageText[i];
-                if (!message) {
+                const type: number = this.messageType[i];
+                const content: string | null = this.messageText[i];
+                if (!content) {
                     continue;
                 }
 
-                const type: number = this.messageType[i];
                 const y: number = this.chatScrollOffset + 70 - line * 14;
-
                 let sender = this.messageSender[i];
                 let modlevel = 0;
                 if (sender && sender.startsWith('@cr1@')) {
@@ -11184,89 +11244,119 @@ export class Client extends GameShell {
                     modlevel = 2;
                 }
 
-                if (type === 0) {
-                    const isYell = message.startsWith('[') && message.substring(1).includes(']: ');
-                    const isClan = message.startsWith('@red@[Clan]');
+                const isAllTab = this.chatTab === 0;
+                const isPublicTab = this.chatTab === 1;
+                const isPrivateTab = this.chatTab === 2;
+                const isTradeTab = this.chatTab === 3;
 
-                    if (this.chatPublicMode === 1) { // World
-                        if (!isYell) continue;
-                    } else if (this.chatPublicMode === 2) { // Clan
-                        if (!isClan) continue;
-                    } else if (this.chatPublicMode === 3) { // Public
-                        if (isYell || isClan) continue;
-                    } else if (this.chatPublicMode === 4) { // Hide
-                        continue;
-                    }
+                // --- CATEGORIZATION SYSTEM ---
+                // 0=Public, 1=Trade, 2=Yell, 3=Clan, 4=Game, 5=Private
+                let category = 0;
+                
+                const messageLower = content.toLowerCase();
+                const isTradePrefix = content.trimStart().startsWith('$') || content.includes('[@yel@');
+                const isTradeKeyword = messageLower.includes('trade:') || messageLower.includes('duel:') || messageLower.includes('wishes to trade');
+                
+                if (isTradePrefix || isTradeKeyword || type === 4 || type === 8) {
+                    category = 1; // TRADE
+                } else if (content.replace(/@\w{3}@/g, '').trimStart().startsWith('[')) {
+                    if (content.includes('[@dbl@')) category = 2; // YELL
+                    else if (content.includes('[@dre@')) category = 3; // CLAN
+                    else category = 2; // Default broadcast
+                } else if (type === 0) {
+                    category = 4; // GAME
+                } else if (type === 3 || type === 7 || type === 5 || type === 6) {
+                    category = 5; // PRIVATE
+                } else {
+                    category = 0; // PUBLIC (type 1, 2, etc)
+                }
 
+                // --- TAB ISOLATION ---
+                let permitted = false;
+                if (isAllTab) {
+                    permitted = true;
+                } else if (isPublicTab) {
+                    permitted = (category === 0);
+                } else if (isTradeTab) {
+                    permitted = (category === 1);
+                } else if (isPrivateTab) {
+                    permitted = (category === 5);
+                }
+
+                if (!permitted) continue;
+
+                // --- FILTERING RULES ---
+                if (category === 1) {
+                    if (this.chatTradeMode === 2) continue;
+                    if (this.chatTradeMode === 1 && !this.isFriend(sender)) continue;
+                } else if (category === 0 || category === 2 || category === 3 || category === 4) {
+                    if (this.chatPublicMode === 2) continue;
+                    if (this.chatPublicMode === 1 && category !== 4 && !this.isFriend(sender)) continue;
+                } else if (category === 5) {
+                    if (this.chatPrivateMode === 2) continue;
+                    if (this.chatPrivateMode === 1 && !this.isFriend(sender)) continue;
+                }
+
+                // --- RENDERING ---
+                
+                if (category === 1) {
+                    // Trade Rendering (Yellow)
+                    let cleanMsg = content.trimStart();
+                    if (cleanMsg.startsWith('$')) cleanMsg = cleanMsg.substring(1).trim();
                     if (y > 0 && y < 110) {
-                        font?.drawStringTag(4, y, message, Colour.BLACK, false);
+                        font?.drawStringTag(4, y, cleanMsg, Colour.YELLOW, false);
                     }
-
                     line++;
-                } else if ((type === 1 || type === 2) && (type === 1 || this.chatPublicMode === 0 || this.chatPublicMode === 3 || (this.chatPublicMode === 1 && this.isFriend(sender)))) {
+                } else if (category === 4) {
+                    // Game Message Rendering (Black)
+                    if (y > 0 && y < 110) {
+                        font?.drawStringTag(4, y, content, Colour.BLACK, false);
+                    }
+                    line++;
+                } else if (category === 0 || category === 2 || category === 3) {
+                    // Public/Broadcast Rendering
                     if (y > 0 && y < 110) {
                         let x = 4;
-                        if (modlevel == 1) {
-                            this.modIcons[0].plotSprite(x, y - 12);
-                            x += 14;
-                        } else if (modlevel == 2) {
-                            this.modIcons[1].plotSprite(x, y - 12);
+                        if (modlevel > 0) {
+                            this.modIcons[modlevel - 1].plotSprite(x, y - 12);
                             x += 14;
                         }
 
-                        font?.drawString(x, y, sender + ':', Colour.BLACK);
-                        x += (font?.stringWid(sender) ?? 0) + 8;
+                        let drawColor = Colour.BLACK;
+                        if (category === 2) drawColor = 0x000080; // Dark Blue Yell
+                        if (category === 3) drawColor = 0x800000; // Dark Red Clan
 
-                        font?.drawString(x, y, message, Colour.BLUE);
+                        if (sender) {
+                            font?.drawString(x, y, sender + ': ', drawColor);
+                            x += font?.stringWid(sender + ': ') ?? 0;
+                        }
+                        font?.drawStringTag(x, y, content, drawColor, false);
                     }
-
                     line++;
-                } else if ((type === 3 || type === 7) && this.splitPrivateChat === 0 && ((type === 7 && this.chatPrivateMode < 2) || this.chatPrivateMode === 0 || (this.chatPrivateMode === 1 && this.isFriend(sender)))) {
+                } else if (category === 5) {
+                    // Private Message Rendering (Dark Red)
                     if (y > 0 && y < 110) {
                         let x = 4;
+                        let label = 'From ';
+                        if (type === 6) label = 'To ';
+                        if (type === 5) label = ''; // System notification
+                        
+                        if (label) {
+                            font?.drawString(x, y, label, Colour.BLACK);
+                            x += font?.stringWid(label) ?? 0;
+                        }
 
-                        font?.drawString(x, y, 'From ', Colour.BLACK);
-                        x += font?.stringWid('From ') ?? 0;
-
-                        if (modlevel == 1) {
-                            this.modIcons[0].plotSprite(x, y - 12);
-                            x += 14;
-                        } else if (modlevel == 2) {
-                            this.modIcons[1].plotSprite(x, y - 12);
+                        if (modlevel > 0 && type !== 6) {
+                            this.modIcons[modlevel - 1].plotSprite(x, y - 12);
                             x += 14;
                         }
 
-                        font?.drawString(x, y, sender + ':', Colour.BLACK);
-                        x += (font?.stringWid(sender) ?? 0) + 8;
-
-                        font?.drawString(x, y, message, Colour.DARKRED);
+                        if (sender && type !== 5) {
+                            font?.drawString(x, y, sender + ':', Colour.BLACK);
+                            x += (font?.stringWid(sender) ?? 0) + 8;
+                        }
+                        font?.drawString(x, y, content, Colour.DARKRED);
                     }
-
-                    line++;
-                } else if (type === 4 && (this.chatTradeMode === 0 || (this.chatTradeMode === 1 && this.isFriend(sender)))) {
-                    if (y > 0 && y < 110) {
-                        font?.drawString(4, y, sender + ' ' + this.messageText[i], 0x800080);
-                    }
-
-                    line++;
-                } else if (type === 5 && this.splitPrivateChat === 0 && this.chatPrivateMode < 2) {
-                    if (y > 0 && y < 110) {
-                        font?.drawString(4, y, message, Colour.DARKRED);
-                    }
-
-                    line++;
-                } else if (type === 6 && this.splitPrivateChat === 0 && this.chatPrivateMode < 2) {
-                    if (y > 0 && y < 110) {
-                        font?.drawString(4, y, 'To ' + sender + ':', Colour.BLACK);
-                        font?.drawString(font.stringWid('To ' + sender) + 12, y, message, Colour.DARKRED);
-                    }
-
-                    line++;
-                } else if (type === 8 && (this.chatTradeMode === 0 || (this.chatTradeMode === 1 && this.isFriend(sender)))) {
-                    if (y > 0 && y < 110) {
-                        font?.drawString(4, y, sender + ' ' + this.messageText[i], 0x7e3200);
-                    }
-
                     line++;
                 }
             }
@@ -11288,7 +11378,7 @@ export class Client extends GameShell {
             }
 
             font?.drawString(4, 90, username + ':', Colour.BLACK);
-            font?.drawString(font.stringWid(username + ': ') + 6, 90, this.chatTyped + '*', Colour.BLUE);
+            font?.drawString((font?.stringWid(username + ': ') ?? 0) + 6, 90, this.chatTyped + '*', Colour.BLUE);
 
             Pix2D.hline(0, 77, Colour.BLACK, 479);
         }
