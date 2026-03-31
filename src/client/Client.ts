@@ -10522,8 +10522,8 @@ export class Client extends GameShell {
 
                             // 5. TOP Level: Primary Actions (Wield/Eat/etc.)
                             // These are added absolute LAST so they appear at the VERY TOP of the menu
-                            if (child.interactable && obj.iop && !isEquipmentTab) {
-                                for (let op = 4; op >= 1; op--) { // Process iop 4 -> 1, iop[0] is top
+                            if (child.interactable && obj.iop) {
+                                for (let op = 4; op >= (isEquipmentTab ? 3 : 1); op--) { // Process iop 4 -> 1, iop[0] is top
                                     const option = obj.iop[op - 1];
                                     if (option) {
                                         let action = MenuAction.OPHELD1;
@@ -11303,8 +11303,19 @@ export class Client extends GameShell {
                     // Trade Rendering (Yellow)
                     let cleanMsg = content.trimStart();
                     if (cleanMsg.startsWith('$')) cleanMsg = cleanMsg.substring(1).trim();
+                    let x = 4;
                     if (y > 0 && y < 110) {
-                        font?.drawStringTag(4, y, cleanMsg, Colour.YELLOW, false);
+                        if (cleanMsg.includes('[@')) {
+                            // Already has tags
+                            font?.drawStringTag(x, y, cleanMsg, Colour.BLACK, false);
+                        } else if (sender) {
+                            // Local trade notice
+                            font?.drawString(x, y, sender + ': ', Colour.YELLOW);
+                            x += font?.stringWid(sender + ': ') ?? 0;
+                            font?.drawStringTag(x, y, cleanMsg, Colour.BLACK, false);
+                        } else {
+                            font?.drawStringTag(x, y, cleanMsg, Colour.BLACK, false);
+                        }
                     }
                     line++;
                 } else if (category === 4) {
@@ -11330,7 +11341,7 @@ export class Client extends GameShell {
                             font?.drawString(x, y, sender + ': ', drawColor);
                             x += font?.stringWid(sender + ': ') ?? 0;
                         }
-                        font?.drawStringTag(x, y, content, drawColor, false);
+                        font?.drawStringTag(x, y, content, Colour.BLACK, false);
                     }
                     line++;
                 } else if (category === 5) {
